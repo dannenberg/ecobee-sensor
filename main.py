@@ -23,13 +23,17 @@ class EcobeeApiSensor(Sensor):
         self.api_key = api_key
         self.refresh_token = refresh_token
 
+        self.update_token()
+        super().__init__(name)
+
+    def update_token(self):
         data = {"grant_type":"refresh_token", "code":self.refresh_token, "client_id":self.api_key}
 
         resp = requests.post(TOKEN_URL, data=data)
 
         self.access_token = resp.json()["access_token"]
         self.refresh_token = resp.json()["refresh_token"]
-        super().__init__(name)
+        return
 
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
@@ -46,7 +50,9 @@ class EcobeeApiSensor(Sensor):
 
         # return the status code as an error if we dont get a 200 OK back.
         if response.status_code != 200:
-            return {"error": f"ecobee.com didn't return 200, instead got {response.status_code}"}
+            # likely a stale token, lets refresh
+            self.update_token()
+            return {"error": f"ecobee.com didn't return 200, instead got {response.status_code}. Refreshing token"}
 
         # this would be a great place to modify the data returned if the format direct from the API isn't to your liking.
         return response.json()
